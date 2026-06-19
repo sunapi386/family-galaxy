@@ -32,30 +32,30 @@ body{background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFo
 .connector.dimmed{opacity:0.03}
 
 .node-group{cursor:pointer;transition:opacity .3s}
-.node-circle{stroke-width:2;transition:r .2s,stroke .2s,filter .2s}
-.node-circle.male{fill:#1a3a5c;stroke:#58a6ff}
-.node-circle.female{fill:#4a1a35;stroke:#f778ba}
-.node-circle.other{fill:#2a2a2a;stroke:#8b949e}
-.node-circle.deceased{opacity:0.5;stroke-dasharray:3,3}
-.node-initials{fill:#e6edf3;font-size:13px;font-weight:600;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.node-rect{stroke-width:2;rx:8;ry:8;transition:filter .2s,stroke .2s}
+.node-rect.male{fill:#1a3a5c;stroke:#58a6ff}
+.node-rect.female{fill:#4a1a35;stroke:#f778ba}
+.node-rect.other{fill:#2a2a2a;stroke:#8b949e}
+.node-rect.deceased{opacity:0.5;stroke-dasharray:3,3}
+.node-initials{fill:#e6edf3;font-size:12px;font-weight:600;text-anchor:middle;dominant-baseline:central;pointer-events:none}
 .node-label{fill:#8b949e;font-size:10px;text-anchor:middle;pointer-events:none;transition:fill .3s}
 
-.node-group:hover .node-circle{filter:drop-shadow(0 0 8px currentColor)}
-.node-group:hover .node-circle.male{filter:drop-shadow(0 0 10px rgba(88,166,255,0.6));r:25}
-.node-group:hover .node-circle.female{filter:drop-shadow(0 0 10px rgba(247,120,186,0.6));r:25}
-.node-group:hover .node-circle.other{filter:drop-shadow(0 0 10px rgba(139,148,158,0.5));r:25}
+.node-group:hover .node-rect{filter:drop-shadow(0 0 8px currentColor)}
+.node-group:hover .node-rect.male{filter:drop-shadow(0 0 10px rgba(88,166,255,0.6))}
+.node-group:hover .node-rect.female{filter:drop-shadow(0 0 10px rgba(247,120,186,0.6))}
+.node-group:hover .node-rect.other{filter:drop-shadow(0 0 10px rgba(139,148,158,0.5))}
 .node-group:hover .node-label{fill:#e6edf3}
 
-.node-group.selected .node-circle{stroke-width:3}
-.node-group.selected .node-circle.male{filter:drop-shadow(0 0 14px rgba(88,166,255,0.8));r:26}
-.node-group.selected .node-circle.female{filter:drop-shadow(0 0 14px rgba(247,120,186,0.8));r:26}
+.node-group.selected .node-rect{stroke-width:3}
+.node-group.selected .node-rect.male{filter:drop-shadow(0 0 14px rgba(88,166,255,0.8))}
+.node-group.selected .node-rect.female{filter:drop-shadow(0 0 14px rgba(247,120,186,0.8))}
 .node-group.selected .node-label{fill:#fff;font-weight:600}
 
 .node-group.dimmed{opacity:0.08}
-.node-group.search-match .node-circle{stroke-width:3}
+.node-group.search-match .node-rect{stroke-width:3}
 .node-group.search-match .node-label{fill:#e6edf3;font-size:12px;font-weight:600}
-.node-group.start-node .node-circle{stroke-width:3}
-.node-group.my-node .node-circle{stroke-width:3;filter:drop-shadow(0 0 8px rgba(63,185,80,0.6))}
+.node-group.start-node .node-rect{stroke-width:3}
+.node-group.my-node .node-rect{stroke-width:3;filter:drop-shadow(0 0 8px rgba(63,185,80,0.6))}
 .node-group.my-node .node-label{fill:#3fb950;font-weight:600}
 
 #sidebar{position:fixed;right:-380px;top:52px;width:380px;bottom:0;z-index:40;
@@ -156,9 +156,9 @@ body{background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFo
 #invite-banner button{height:30px;padding:0 14px;border-radius:6px;border:none;background:#fff;color:#238636;font-size:13px;font-weight:600;cursor:pointer}
 
 @keyframes pulse{0%,100%{filter:drop-shadow(0 0 10px rgba(88,166,255,0.5))}50%{filter:drop-shadow(0 0 20px rgba(88,166,255,0.8))}}
-.node-group.selected .node-circle.male{animation:pulse 2s ease-in-out infinite}
+.node-group.selected .node-rect.male{animation:pulse 2s ease-in-out infinite}
 @keyframes pulse-f{0%,100%{filter:drop-shadow(0 0 10px rgba(247,120,186,0.5))}50%{filter:drop-shadow(0 0 20px rgba(247,120,186,0.8))}}
-.node-group.selected .node-circle.female{animation:pulse-f 2s ease-in-out infinite}
+.node-group.selected .node-rect.female{animation:pulse-f 2s ease-in-out infinite}
 </style>
 </head>
 <body>
@@ -214,9 +214,9 @@ body{background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFo
 <div class="modal-overlay" id="auth-modal">
   <div class="modal">
     <h2 id="auth-modal-title">Sign In</h2>
-    <div class="modal-tabs">
+    <div class="modal-tabs" id="auth-tabs">
       <div class="modal-tab active" data-tab="login">Sign In</div>
-      <div class="modal-tab" data-tab="register">Register</div>
+      <div class="modal-tab" data-tab="register" style="display:none">Register</div>
     </div>
     <div class="modal-error" id="auth-error"></div>
     <form id="auth-form" onsubmit="return false">
@@ -270,10 +270,11 @@ body{background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFo
 <script src="https://d3js.org/d3.v7.min.js"></script>
 <script>
 const CONFIG = {
-  nodeRadius: 22,
+  nodeW: 56,
+  nodeH: 36,
   genSpacing: 220,
   nodeGap: 95,
-  partnerGap: 52,
+  partnerGap: 60,
   clusterGap: 300,
 };
 
@@ -292,6 +293,17 @@ const TAGS_I = {
 };
 
 function isCJK(s){return/[一-鿿㐀-䶿]/.test(s)}
+
+function nodeInitials(d){
+  const n=d.name||'';
+  if(!n)return'?';
+  if(isCJK(n))return n.slice(0,3);
+  const parts=n.split(/\s+/);
+  if(parts.length===1)return parts[0].slice(0,4).toUpperCase();
+  const first=parts[0],last=parts[parts.length-1];
+  if(first.length<=4&&parts.length===2)return first.length<=3?first:first.slice(0,4);
+  return(first[0]+(last?last[0]:'')).toUpperCase();
+}
 function unesc(s){return s.replace(/\\n/g,'\n').replace(/\\t/g,'\t').replace(/\\\\/g,'\\')}
 
 function parseDate(d){
@@ -657,7 +669,7 @@ function computeTreeLayout(data){
   }
 
   // Resolve overlaps: ensure minimum spacing between nodes in each generation
-  const minNodeGap=CONFIG.nodeRadius*2+18;
+  const minNodeGap=CONFIG.nodeW+18;
   for(const gen of sortedGens){
     const ids=[...genOrder[gen]];
     ids.sort((a,b)=>nodeMap[a].x-nodeMap[b].x);
@@ -704,7 +716,7 @@ function groupByCluster(order,clusterOf){
 // ── Bracket-style family connectors ──
 function buildConnectors(data,layout){
   const{nodeMap,parentsOf,childrenOf,partnerOf,familyUnits}=layout;
-  const R=CONFIG.nodeRadius;
+  const HW=CONFIG.nodeW/2,HH=CONFIG.nodeH/2;
   const connectors=[];
 
   // Partner connectors (horizontal line between partners)
@@ -719,7 +731,7 @@ function buildConnectors(data,layout){
     if(!p1||!p2)continue;
     const left=p1.x<p2.x?p1:p2,right=p1.x<p2.x?p2:p1;
     connectors.push({
-      d:`M ${left.x+R} ${left.y} L ${right.x-R} ${right.y}`,
+      d:`M ${left.x+HW} ${left.y} L ${right.x-HW} ${right.y}`,
       type:'partner',
       nodeIds:[n.id,partner],
     });
@@ -737,13 +749,13 @@ function buildConnectors(data,layout){
     const childY=sorted[0].y;
     const jY=(parentY+childY)/2;
 
-    let d=`M ${parentCX} ${parentY+R} L ${parentCX} ${jY} `;
+    let d=`M ${parentCX} ${parentY+HH} L ${parentCX} ${jY} `;
     if(sorted.length===1){
-      d+=`L ${sorted[0].x} ${jY} L ${sorted[0].x} ${childY-R}`;
+      d+=`L ${sorted[0].x} ${jY} L ${sorted[0].x} ${childY-HH}`;
     }else{
       const lx=sorted[0].x,rx=sorted[sorted.length-1].x;
       d+=`M ${lx} ${jY} L ${rx} ${jY} `;
-      for(const c of sorted)d+=`M ${c.x} ${jY} L ${c.x} ${childY-R} `;
+      for(const c of sorted)d+=`M ${c.x} ${jY} L ${c.x} ${childY-HH} `;
     }
 
     connectors.push({
@@ -834,27 +846,23 @@ function initGraph(data){
 
   // Render nodes
   const nodeG=g.append('g').attr('class','node-layer');
-  const R=CONFIG.nodeRadius;
+  const NW=CONFIG.nodeW,NH=CONFIG.nodeH;
   const myPersonId=currentUser?.person_id;
   const nodeGroups=nodeG.selectAll('g').data(data.nodes).join('g')
     .attr('class',d=>'node-group'+(d.id===data.startPerson?' start-node':'')+(d.id===myPersonId?' my-node':''))
     .attr('transform',d=>`translate(${d.x},${d.y})`);
 
-  nodeGroups.append('circle').attr('class',d=>{
-    let c='node-circle '+d.gender;
+  nodeGroups.append('rect').attr('class',d=>{
+    let c='node-rect '+d.gender;
     if(d.deceased)c+=' deceased';
     return c;
-  }).attr('r',R);
+  }).attr('x',-NW/2).attr('y',-NH/2).attr('width',NW).attr('height',NH).attr('rx',8).attr('ry',8);
 
   nodeGroups.append('text').attr('class','node-initials')
-    .text(d=>{
-      if(d.name.length<=2)return d.name;
-      if(isCJK(d.name))return d.name.slice(0,2);
-      return d.name.split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase();
-    });
+    .text(d=>nodeInitials(d));
 
-  nodeGroups.append('text').attr('class','node-label').attr('dy',R+14)
-    .text(d=>d.name.length>8?d.name.slice(0,7)+'..':d.name);
+  nodeGroups.append('text').attr('class','node-label').attr('dy',NH/2+14)
+    .text(d=>d.name.length>10?d.name.slice(0,9)+'..':d.name);
 
   // Interactions
   nodeGroups.on('click',(e,d)=>{e.stopPropagation();selectNode(d)});
@@ -983,12 +991,12 @@ function deselectNode(){
 
 // ── Focused-view connectors ──
 function buildFocusConnectors(sel,rels){
-  const R=CONFIG.nodeRadius,conns=[];
+  const HW=CONFIG.nodeW/2,HH=CONFIG.nodeH/2,conns=[];
 
   // Partner line
   for(const p of rels.partners){
     const left=sel.x<p.x?sel:p,right=sel.x<p.x?p:sel;
-    conns.push({d:`M ${left.x+R} ${left.y} L ${right.x-R} ${right.y}`,type:'partner',nodeIds:[sel.id,p.id]});
+    conns.push({d:`M ${left.x+HW} ${left.y} L ${right.x-HW} ${right.y}`,type:'partner',nodeIds:[sel.id,p.id]});
   }
 
   // Parents-to-self+siblings bracket
@@ -996,15 +1004,15 @@ function buildFocusConnectors(sel,rels){
     const kids=[sel,...rels.siblings].sort((a,b)=>a.x-b.x);
     const pcx=rels.parents.reduce((s,p)=>s+p.x,0)/rels.parents.length;
     const py=rels.parents[0].y,cy=sel.y,jy=(py+cy)/2;
-    let d=`M ${pcx} ${py+R} L ${pcx} ${jy} `;
-    if(kids.length===1){d+=`L ${kids[0].x} ${jy} L ${kids[0].x} ${cy-R}`}
-    else{d+=`M ${kids[0].x} ${jy} L ${kids[kids.length-1].x} ${jy} `;for(const c of kids)d+=`M ${c.x} ${jy} L ${c.x} ${cy-R} `}
+    let d=`M ${pcx} ${py+HH} L ${pcx} ${jy} `;
+    if(kids.length===1){d+=`L ${kids[0].x} ${jy} L ${kids[0].x} ${cy-HH}`}
+    else{d+=`M ${kids[0].x} ${jy} L ${kids[kids.length-1].x} ${jy} `;for(const c of kids)d+=`M ${c.x} ${jy} L ${c.x} ${cy-HH} `}
     conns.push({d,type:'parent-child',nodeIds:[...rels.parents.map(p=>p.id),sel.id,...rels.siblings.map(s=>s.id)]});
 
     if(rels.parents.length===2){
       const[p1,p2]=rels.parents;
       const l=p1.x<p2.x?p1:p2,r=p1.x<p2.x?p2:p1;
-      conns.push({d:`M ${l.x+R} ${l.y} L ${r.x-R} ${r.y}`,type:'partner',nodeIds:[p1.id,p2.id]});
+      conns.push({d:`M ${l.x+HW} ${l.y} L ${r.x-HW} ${r.y}`,type:'partner',nodeIds:[p1.id,p2.id]});
     }
   }
 
@@ -1014,9 +1022,9 @@ function buildFocusConnectors(sel,rels){
     const pcx=pars.reduce((s,p)=>s+p.x,0)/pars.length;
     const py=sel.y,sorted=[...rels.children].sort((a,b)=>a.x-b.x);
     const cy=sorted[0].y,jy=(py+cy)/2;
-    let d=`M ${pcx} ${py+R} L ${pcx} ${jy} `;
-    if(sorted.length===1){d+=`L ${sorted[0].x} ${jy} L ${sorted[0].x} ${cy-R}`}
-    else{d+=`M ${sorted[0].x} ${jy} L ${sorted[sorted.length-1].x} ${jy} `;for(const c of sorted)d+=`M ${c.x} ${jy} L ${c.x} ${cy-R} `}
+    let d=`M ${pcx} ${py+HH} L ${pcx} ${jy} `;
+    if(sorted.length===1){d+=`L ${sorted[0].x} ${jy} L ${sorted[0].x} ${cy-HH}`}
+    else{d+=`M ${sorted[0].x} ${jy} L ${sorted[sorted.length-1].x} ${jy} `;for(const c of sorted)d+=`M ${c.x} ${jy} L ${c.x} ${cy-HH} `}
     conns.push({d,type:'parent-child',nodeIds:[sel.id,...rels.partners.map(p=>p.id),...rels.children.map(c=>c.id)]});
   }
 
@@ -1328,13 +1336,9 @@ function saveProfile(d){
 
 function updateNodeVisual(d){
   const group=d3.selectAll('.node-group').filter(n=>n.id===d.id);
-  group.select('.node-initials').text(()=>{
-    if(d.name.length<=2)return d.name;
-    if(isCJK(d.name))return d.name.slice(0,2);
-    return d.name.split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase();
-  });
-  group.select('.node-label').text(d.name.length>8?d.name.slice(0,7)+'..':d.name);
-  group.select('.node-circle').attr('class',`node-circle ${d.gender}${d.deceased?' deceased':''}`);
+  group.select('.node-initials').text(nodeInitials(d));
+  group.select('.node-label').text(d.name.length>10?d.name.slice(0,9)+'..':d.name);
+  group.select('.node-rect').attr('class',`node-rect ${d.gender}${d.deceased?' deceased':''}`);
 }
 
 function exportData(){
@@ -1651,11 +1655,18 @@ function updateAuthUI(){
   }
 }
 
+let needsSetup=false;
+
 async function checkAuth(){
   try{
-    const r=await fetch('/api/auth/me');
-    const data=await r.json();
-    currentUser=data;
+    const[meRes,statusRes]=await Promise.all([fetch('/api/auth/me'),fetch('/api/auth/status')]);
+    const me=await meRes.json();
+    const status=await statusRes.json();
+    currentUser=me;
+    needsSetup=status.needs_setup;
+    if(needsSetup&&!currentUser){
+      setTimeout(()=>{showAuthModal('register');toast('Create the first admin account')},500);
+    }
   }catch(e){currentUser=null}
   updateAuthUI();
 }
@@ -1663,7 +1674,10 @@ async function checkAuth(){
 function showAuthModal(tab){
   const modal=document.getElementById('auth-modal');
   modal.classList.add('visible');
-  switchAuthTab(tab||'login');
+  const regTab=document.querySelector('.modal-tab[data-tab="register"]');
+  const canRegister=pendingInvite||needsSetup;
+  regTab.style.display=canRegister?'':'none';
+  switchAuthTab(tab||(canRegister?'register':'login'));
   document.getElementById('auth-email').focus();
 }
 

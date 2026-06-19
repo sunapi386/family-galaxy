@@ -478,6 +478,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._json(person) if person else self._error(404, 'Not found')
         elif p == '/api/partnerships':
             self._json(list_partnerships())
+        elif p == '/api/auth/status':
+            with db_connect() as conn:
+                user_count = conn.execute('SELECT COUNT(*) FROM users').fetchone()[0]
+            self._json({'has_users': user_count > 0, 'needs_setup': user_count == 0})
         elif p == '/api/auth/me':
             user = self._get_user()
             if user:
@@ -548,6 +552,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return
             if len(password) < 6:
                 self._error(400, 'Password must be at least 6 characters')
+                return
+            with db_connect() as conn:
+                user_count = conn.execute('SELECT COUNT(*) FROM users').fetchone()[0]
+            if user_count > 0 and not invite_token:
+                self._error(403, 'Invite token required to register')
+                return
+            if invite_token and not get_invite(invite_token):
+                self._error(403, 'Invalid or expired invite token')
                 return
             try:
                 uid = create_user(email, password, display_name)
