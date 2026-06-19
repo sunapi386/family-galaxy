@@ -55,6 +55,8 @@ body{background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFo
 .node-group.search-match .node-circle{stroke-width:3}
 .node-group.search-match .node-label{fill:#e6edf3;font-size:12px;font-weight:600}
 .node-group.start-node .node-circle{stroke-width:3}
+.node-group.my-node .node-circle{stroke-width:3;filter:drop-shadow(0 0 8px rgba(63,185,80,0.6))}
+.node-group.my-node .node-label{fill:#3fb950;font-weight:600}
 
 #sidebar{position:fixed;right:-380px;top:52px;width:380px;bottom:0;z-index:40;
   background:rgba(13,17,23,0.94);backdrop-filter:blur(16px);border-left:1px solid #30363d;
@@ -122,6 +124,37 @@ body{background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFo
 #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:100;padding:8px 16px;border-radius:6px;background:#21262d;border:1px solid #30363d;color:#8b949e;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none}
 #toast.show{opacity:1}
 
+.modal-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.modal-overlay.visible{display:flex}
+.modal{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:32px;width:380px;max-width:90vw;box-shadow:0 16px 32px rgba(0,0,0,0.4)}
+.modal h2{font-size:20px;font-weight:600;margin-bottom:20px;color:#e6edf3}
+.modal-tabs{display:flex;gap:0;margin-bottom:20px;border-bottom:1px solid #30363d}
+.modal-tab{flex:1;padding:8px 0;text-align:center;font-size:14px;color:#8b949e;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.modal-tab.active{color:#58a6ff;border-bottom-color:#58a6ff}
+.modal-field{margin-bottom:12px}
+.modal-field label{display:block;font-size:12px;color:#8b949e;margin-bottom:4px}
+.modal-field input{width:100%;height:36px;padding:0 12px;border-radius:6px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:14px;outline:none;box-sizing:border-box}
+.modal-field input:focus{border-color:#58a6ff}
+.modal-btn{width:100%;height:38px;border-radius:6px;border:none;font-size:14px;font-weight:500;cursor:pointer;transition:background .15s}
+.modal-btn.primary{background:#238636;color:#fff}
+.modal-btn.primary:hover{background:#2ea043}
+.modal-btn.secondary{background:#21262d;color:#c9d1d9;border:1px solid #30363d;margin-top:8px}
+.modal-btn.secondary:hover{background:#30363d}
+.modal-error{color:#f85149;font-size:13px;margin-bottom:12px;display:none}
+
+.user-menu{display:flex;align-items:center;gap:8px}
+.user-name{font-size:13px;color:#8b949e;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.user-badge{font-size:10px;padding:2px 6px;border-radius:4px;background:#238636;color:#fff;font-weight:600}
+
+.invite-link-box{display:flex;gap:6px;margin:12px 0}
+.invite-link-box input{flex:1;height:32px;padding:0 8px;border-radius:4px;border:1px solid #30363d;background:#0d1117;color:#58a6ff;font-size:12px;font-family:monospace;outline:none}
+.invite-link-box button{height:32px;padding:0 12px;border-radius:4px;border:1px solid #30363d;background:#21262d;color:#c9d1d9;font-size:12px;cursor:pointer}
+.invite-link-box button:hover{background:#30363d}
+
+#invite-banner{position:fixed;top:52px;left:0;right:0;z-index:45;padding:10px 20px;background:rgba(35,134,54,0.9);color:#fff;font-size:14px;display:none;align-items:center;gap:12px;backdrop-filter:blur(8px)}
+#invite-banner.visible{display:flex}
+#invite-banner button{height:30px;padding:0 14px;border-radius:6px;border:none;background:#fff;color:#238636;font-size:13px;font-weight:600;cursor:pointer}
+
 @keyframes pulse{0%,100%{filter:drop-shadow(0 0 10px rgba(88,166,255,0.5))}50%{filter:drop-shadow(0 0 20px rgba(88,166,255,0.8))}}
 .node-group.selected .node-circle.male{animation:pulse 2s ease-in-out infinite}
 @keyframes pulse-f{0%,100%{filter:drop-shadow(0 0 10px rgba(247,120,186,0.5))}50%{filter:drop-shadow(0 0 20px rgba(247,120,186,0.8))}}
@@ -134,7 +167,7 @@ body{background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFo
 
 <div id="header">
   <div id="logo">Family Galaxy</div>
-  <input id="search" type="text" placeholder="Search by name... (/)">
+  <input id="search" type="text" placeholder="Search name, profession, place... (/)">
   <div id="stats"></div>
   <div id="controls">
     <button id="btn-fit" title="Fit all (F)">Fit</button>
@@ -142,8 +175,14 @@ body{background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFo
     <label title="Load FamilyScript .txt file">
       Load <input type="file" accept=".txt" id="file-input">
     </label>
-    <button id="btn-add" title="Add a new person">+ Person</button>
+    <label title="Import JSON file" id="btn-import-wrap">
+      Import <input type="file" accept=".json" id="json-import-input" style="display:none">
+    </label>
+    <button id="btn-add" title="Add a new person" style="display:none">+ Person</button>
     <button id="btn-export" title="Export data as JSON">Export</button>
+    <div id="auth-controls">
+      <button id="btn-signin">Sign in</button>
+    </div>
   </div>
 </div>
 
@@ -170,6 +209,60 @@ body{background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFo
 <div id="drop-overlay">
   <div class="drop-icon">+</div>
   <div class="drop-text">Drop FamilyScript .txt file</div>
+</div>
+
+<div class="modal-overlay" id="auth-modal">
+  <div class="modal">
+    <h2 id="auth-modal-title">Sign In</h2>
+    <div class="modal-tabs">
+      <div class="modal-tab active" data-tab="login">Sign In</div>
+      <div class="modal-tab" data-tab="register">Register</div>
+    </div>
+    <div class="modal-error" id="auth-error"></div>
+    <form id="auth-form" onsubmit="return false">
+      <div class="modal-field" id="field-name" style="display:none">
+        <label>Name</label>
+        <input type="text" id="auth-name" placeholder="Your name">
+      </div>
+      <div class="modal-field">
+        <label>Email</label>
+        <input type="email" id="auth-email" placeholder="you@example.com" required>
+      </div>
+      <div class="modal-field">
+        <label>Password</label>
+        <input type="password" id="auth-password" placeholder="Min 6 characters" required>
+      </div>
+      <button type="submit" class="modal-btn primary" id="auth-submit">Sign In</button>
+      <button type="button" class="modal-btn secondary" onclick="closeAuthModal()">Cancel</button>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="invite-modal">
+  <div class="modal">
+    <h2>Invite to Edit</h2>
+    <p style="font-size:13px;color:#8b949e;margin-bottom:16px" id="invite-desc"></p>
+    <div class="modal-field">
+      <label>Email (optional, for their reference)</label>
+      <input type="email" id="invite-email" placeholder="relative@example.com">
+    </div>
+    <button class="modal-btn primary" id="btn-create-invite">Create Invite Link</button>
+    <div id="invite-result" style="display:none">
+      <div style="font-size:12px;color:#8b949e;margin-top:16px">Share this link:</div>
+      <div class="invite-link-box">
+        <input type="text" id="invite-url" readonly>
+        <button id="btn-copy-invite">Copy</button>
+      </div>
+      <a id="invite-mailto" href="#" style="font-size:13px;color:#58a6ff;text-decoration:none">Send via email</a>
+    </div>
+    <button class="modal-btn secondary" onclick="closeInviteModal()" style="margin-top:12px">Close</button>
+  </div>
+</div>
+
+<div id="invite-banner">
+  <span id="invite-banner-text"></span>
+  <button id="btn-claim-invite">Claim This Profile</button>
+  <button onclick="dismissInviteBanner()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.3)">Dismiss</button>
 </div>
 
 <div id="toast"></div>
@@ -742,8 +835,9 @@ function initGraph(data){
   // Render nodes
   const nodeG=g.append('g').attr('class','node-layer');
   const R=CONFIG.nodeRadius;
+  const myPersonId=currentUser?.person_id;
   const nodeGroups=nodeG.selectAll('g').data(data.nodes).join('g')
-    .attr('class',d=>'node-group'+(d.id===data.startPerson?' start-node':''))
+    .attr('class',d=>'node-group'+(d.id===data.startPerson?' start-node':'')+(d.id===myPersonId?' my-node':''))
     .attr('transform',d=>`translate(${d.x},${d.y})`);
 
   nodeGroups.append('circle').attr('class',d=>{
@@ -1005,7 +1099,10 @@ function showProfile(d){
     <div class="profile-subtitle">${dates||''}${d.surname_birth&&d.surname_birth!==d.surname?' (born '+d.surname_birth+')':''}</div>
 
     <div class="profile-header-actions">
-      <button class="edit-btn" id="btn-edit-profile">Edit</button>
+      ${currentUser?`<button class="edit-btn" id="btn-edit-profile">Edit</button>
+      <button class="edit-btn" id="btn-invite-person" title="Invite someone to claim this profile">Invite</button>
+      ${(!currentUser.person_id)?`<button class="edit-btn" id="btn-claim-me" title="Link this person to your account">This is me</button>`:''}`:
+      `<button class="edit-btn" id="btn-prompt-signin">Sign in to edit</button>`}
     </div>
 
     <div class="profile-section">
@@ -1047,7 +1144,19 @@ function showProfile(d){
     });
   });
 
-  document.getElementById('btn-edit-profile').addEventListener('click',()=>showProfileEdit(d));
+  const editBtn=document.getElementById('btn-edit-profile');
+  if(editBtn)editBtn.addEventListener('click',()=>showProfileEdit(d));
+  const inviteBtn=document.getElementById('btn-invite-person');
+  if(inviteBtn)inviteBtn.addEventListener('click',()=>showInviteModal(d));
+  const claimBtn=document.getElementById('btn-claim-me');
+  if(claimBtn)claimBtn.addEventListener('click',async()=>{
+    const r=await fetch('/api/auth/link',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({person_id:d.id})});
+    const data=await r.json();
+    if(r.ok){await checkAuth();showProfile(d);toast('Linked to your account')}
+    else toast(data.error||'Error');
+  });
+  const signinBtn=document.getElementById('btn-prompt-signin');
+  if(signinBtn)signinBtn.addEventListener('click',()=>showAuthModal());
   document.getElementById('sidebar').classList.add('open');
 }
 
@@ -1129,7 +1238,7 @@ function showProfileEdit(d){
     <div class="edit-actions">
       <button type="button" class="edit-btn save" id="btn-save-profile">Save</button>
       <button type="button" class="edit-btn" id="btn-cancel-edit">Cancel</button>
-      <button type="button" class="edit-btn danger" id="btn-delete-person" style="margin-left:auto">Delete</button>
+      ${currentUser&&currentUser.role==='admin'?'<button type="button" class="edit-btn danger" id="btn-delete-person" style="margin-left:auto">Delete</button>':''}
     </div>
   `;
 
@@ -1141,11 +1250,12 @@ function showProfileEdit(d){
   });
   document.getElementById('btn-save-profile').addEventListener('click',()=>saveProfile(d));
   document.getElementById('btn-cancel-edit').addEventListener('click',()=>showProfile(d));
-  document.getElementById('btn-delete-person').addEventListener('click',()=>{
+  const delBtn=document.getElementById('btn-delete-person');
+  if(delBtn)delBtn.addEventListener('click',()=>{
     if(!confirm(`Delete ${d.name}? This cannot be undone.`))return;
     fetch('/api/people/'+d.id,{method:'DELETE'}).then(r=>{
       if(r.ok){deselectNode();hideSidebar();reloadTree();toast(d.name+' deleted')}
-      else toast('Delete failed');
+      else r.json().then(e=>toast(e.error||'Delete failed'));
     });
   });
   const photoInput=document.getElementById('photo-input');
@@ -1254,6 +1364,7 @@ function reloadTree(){
 }
 
 function addPerson(){
+  if(!currentUser){showAuthModal();return}
   const d={
     id:'',given_names:'',surname:'',surname_birth:'',gender:'other',
     birth_date:null,death_date:null,deceased:false,birth_place:'',
@@ -1269,6 +1380,13 @@ function addPerson(){
     <div class="profile-avatar other" style="font-size:36px">+</div>
     <div class="profile-name" style="margin-bottom:16px">New Person</div>
     <form id="edit-form" onsubmit="return false">
+      <div class="profile-section">
+        <div class="profile-section-title">Photo</div>
+        <div class="profile-row" style="gap:6px">
+          <label class="edit-btn" style="cursor:pointer">Upload <input type="file" accept="image/*" id="new-photo-input" style="display:none"></label>
+          <span id="new-photo-name" style="font-size:12px;color:#8b949e"></span>
+        </div>
+      </div>
       <div class="profile-section">
         <div class="profile-section-title">Name</div>
         ${inputRow('Given','given_names','')}
@@ -1299,6 +1417,16 @@ function addPerson(){
     </div>
   `;
 
+  let pendingPhoto=null;
+  const photoInput=document.getElementById('new-photo-input');
+  if(photoInput)photoInput.addEventListener('change',function(e){
+    const file=e.target.files[0];if(!file)return;
+    document.getElementById('new-photo-name').textContent=file.name;
+    const reader=new FileReader();
+    reader.onload=ev=>{pendingPhoto=ev.target.result};
+    reader.readAsDataURL(file);
+  });
+
   document.getElementById('btn-create-person').addEventListener('click',()=>{
     const form=document.getElementById('edit-form');
     const get=name=>{const el=form.querySelector('[name=\"'+name+'\"]');return el?el.value.trim():''};
@@ -1311,8 +1439,12 @@ function addPerson(){
     if(!body.given_names&&!body.surname){toast('Name required');return}
     fetch('/api/people',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify(body)
-    }).then(r=>r.json()).then(data=>{
-      hideSidebar();reloadTree();toast('Created '+( body.given_names||body.surname));
+    }).then(r=>r.json()).then(async data=>{
+      if(pendingPhoto&&data.id){
+        await fetch('/api/people/'+data.id+'/photo',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({photo:pendingPhoto})});
+      }
+      hideSidebar();reloadTree();toast('Created '+(body.given_names||body.surname));
     }).catch(()=>toast('Create failed'));
   });
   document.getElementById('btn-cancel-create').addEventListener('click',()=>hideSidebar());
@@ -1360,9 +1492,9 @@ function searchNodes(query){
   const q=query.toLowerCase();
   const matchIds=new Set();
   for(const n of state.data.nodes){
-    if(n.name.toLowerCase().includes(q)||n.surname.toLowerCase().includes(q)||
-       n.given_names.toLowerCase().includes(q)||(n.surname_birth&&n.surname_birth.toLowerCase().includes(q)))
-      matchIds.add(n.id);
+    const fields=[n.name,n.surname,n.given_names,n.surname_birth,
+      n.profession,n.birth_place,n.company,n.bio_notes,n.interests,n.email].map(f=>(f||'').toLowerCase());
+    if(fields.some(f=>f.includes(q)))matchIds.add(n.id);
   }
   d3.selectAll('.node-group').classed('dimmed',d=>!matchIds.has(d.id)).classed('search-match',d=>matchIds.has(d.id));
   d3.selectAll('.connector').classed('dimmed',true);
@@ -1494,9 +1626,214 @@ document.getElementById('sidebar-close').addEventListener('click',()=>{deselectN
 document.getElementById('btn-export').addEventListener('click',()=>exportData());
 document.getElementById('btn-add').addEventListener('click',()=>addPerson());
 
+// ── Auth State ──
+let currentUser=null;
+let pendingInvite=null;
+
+function updateAuthUI(){
+  const ac=document.getElementById('auth-controls');
+  const addBtn=document.getElementById('btn-add');
+  const importWrap=document.getElementById('btn-import-wrap');
+  if(currentUser){
+    ac.innerHTML=`<div class="user-menu">
+      <span class="user-name">${currentUser.display_name||currentUser.email}</span>
+      ${currentUser.role==='admin'?'<span class="user-badge">admin</span>':''}
+      <button id="btn-signout" style="height:32px;padding:0 10px;border-radius:6px;border:1px solid #30363d;background:#21262d;color:#c9d1d9;font-size:13px;cursor:pointer">Sign out</button>
+    </div>`;
+    document.getElementById('btn-signout').addEventListener('click',signOut);
+    addBtn.style.display='';
+    importWrap.style.display=currentUser.role==='admin'?'':'none';
+  }else{
+    ac.innerHTML='<button id="btn-signin">Sign in</button>';
+    document.getElementById('btn-signin').addEventListener('click',()=>showAuthModal());
+    addBtn.style.display='none';
+    importWrap.style.display='none';
+  }
+}
+
+async function checkAuth(){
+  try{
+    const r=await fetch('/api/auth/me');
+    const data=await r.json();
+    currentUser=data;
+  }catch(e){currentUser=null}
+  updateAuthUI();
+}
+
+function showAuthModal(tab){
+  const modal=document.getElementById('auth-modal');
+  modal.classList.add('visible');
+  switchAuthTab(tab||'login');
+  document.getElementById('auth-email').focus();
+}
+
+function closeAuthModal(){
+  document.getElementById('auth-modal').classList.remove('visible');
+  document.getElementById('auth-error').style.display='none';
+  document.getElementById('auth-form').reset();
+}
+
+let authTab='login';
+function switchAuthTab(tab){
+  authTab=tab;
+  document.querySelectorAll('.modal-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
+  document.getElementById('field-name').style.display=tab==='register'?'':'none';
+  document.getElementById('auth-submit').textContent=tab==='register'?'Create Account':'Sign In';
+  document.getElementById('auth-modal-title').textContent=tab==='register'?'Create Account':'Sign In';
+}
+
+document.querySelectorAll('.modal-tab').forEach(t=>t.addEventListener('click',()=>switchAuthTab(t.dataset.tab)));
+
+document.getElementById('auth-form').addEventListener('submit',async function(e){
+  e.preventDefault();
+  const errEl=document.getElementById('auth-error');
+  errEl.style.display='none';
+  const email=document.getElementById('auth-email').value.trim();
+  const password=document.getElementById('auth-password').value;
+  const name=document.getElementById('auth-name').value.trim();
+
+  const endpoint=authTab==='register'?'/api/auth/register':'/api/auth/login';
+  const body={email,password};
+  if(authTab==='register'){
+    body.display_name=name;
+    if(pendingInvite)body.invite_token=pendingInvite;
+  }
+
+  try{
+    const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const data=await r.json();
+    if(!r.ok){errEl.textContent=data.error||'Error';errEl.style.display='block';return}
+    currentUser=data;
+    closeAuthModal();
+    updateAuthUI();
+    toast(authTab==='register'?'Account created':'Signed in');
+    if(pendingInvite&&authTab==='login'){
+      await fetch('/api/invites/'+pendingInvite+'/accept',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+      await checkAuth();
+      pendingInvite=null;
+      dismissInviteBanner();
+    }
+  }catch(err){errEl.textContent='Connection error';errEl.style.display='block'}
+});
+
+async function signOut(){
+  await fetch('/api/auth/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+  currentUser=null;
+  updateAuthUI();
+  toast('Signed out');
+}
+
+document.getElementById('auth-modal').addEventListener('click',function(e){
+  if(e.target===this)closeAuthModal();
+});
+
+// ── Invite Modal ──
+let invitePersonId=null;
+
+function showInviteModal(d){
+  invitePersonId=d.id;
+  document.getElementById('invite-desc').textContent='Create an invite link for '+d.name+'. They can register and claim this profile.';
+  document.getElementById('invite-result').style.display='none';
+  document.getElementById('invite-email').value='';
+  document.getElementById('invite-modal').classList.add('visible');
+}
+
+function closeInviteModal(){
+  document.getElementById('invite-modal').classList.remove('visible');
+}
+
+document.getElementById('invite-modal').addEventListener('click',function(e){
+  if(e.target===this)closeInviteModal();
+});
+
+document.getElementById('btn-create-invite').addEventListener('click',async function(){
+  const email=document.getElementById('invite-email').value.trim();
+  try{
+    const r=await fetch('/api/invites',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({person_id:invitePersonId,email})});
+    const data=await r.json();
+    if(!r.ok){toast(data.error||'Error');return}
+    const url=location.origin+data.url;
+    document.getElementById('invite-url').value=url;
+    document.getElementById('invite-result').style.display='';
+    const person=state.nodeMap[invitePersonId];
+    const subject=encodeURIComponent('You\'re invited to the family tree');
+    const body=encodeURIComponent('Hi,\n\nYou\'ve been invited to join our family tree as '+(person?person.name:'a family member')+'.\n\nClick here to join: '+url);
+    document.getElementById('invite-mailto').href='mailto:'+(email||'')+'?subject='+subject+'&body='+body;
+  }catch(e){toast('Error creating invite')}
+});
+
+document.getElementById('btn-copy-invite').addEventListener('click',function(){
+  const input=document.getElementById('invite-url');
+  navigator.clipboard.writeText(input.value).then(()=>toast('Link copied'));
+});
+
+// ── Invite Banner (shown when visiting /invite/:token URL) ──
+function checkInviteToken(){
+  const m=location.hash.match(/#invite\/(.+)/);
+  if(!m)return;
+  const token=m[1];
+  fetch('/api/invites/'+token).then(r=>r.json()).then(data=>{
+    if(data.error)return;
+    pendingInvite=token;
+    const banner=document.getElementById('invite-banner');
+    document.getElementById('invite-banner-text').textContent=
+      'You\'ve been invited to join as '+(data.person_name||'a family member');
+    banner.classList.add('visible');
+    document.getElementById('graph-container').style.top='94px';
+    document.getElementById('btn-claim-invite').addEventListener('click',()=>{
+      if(currentUser){
+        fetch('/api/invites/'+token+'/accept',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+          .then(r=>r.json()).then(d=>{
+            if(d.ok){checkAuth();dismissInviteBanner();toast('Profile claimed!');reloadTree()}
+          });
+      }else{
+        showAuthModal('register');
+      }
+    });
+    if(data.person_id){
+      const waitForTree=setInterval(()=>{
+        if(state.nodeMap[data.person_id]){
+          clearInterval(waitForTree);
+          const node=state.nodeMap[data.person_id];
+          selectNode(node);centerOn(node);
+        }
+      },200);
+      setTimeout(()=>clearInterval(waitForTree),5000);
+    }
+  }).catch(()=>{});
+}
+
+function dismissInviteBanner(){
+  document.getElementById('invite-banner').classList.remove('visible');
+  document.getElementById('graph-container').style.top='52px';
+  history.replaceState(null,'',location.pathname);
+}
+
+// ── JSON Import ──
+document.getElementById('json-import-input').addEventListener('change',function(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    try{
+      const data=JSON.parse(ev.target.result);
+      fetch('/api/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})
+        .then(r=>r.json()).then(res=>{
+          if(res.imported){reloadTree();toast('Imported '+res.imported+' people')}
+          else if(res.error)toast(res.error);
+        });
+    }catch(err){toast('Invalid JSON file')}
+  };
+  reader.readAsText(file);
+  this.value='';
+});
+
 // ── Init ──
 createStarfield();
 state.transform=d3.zoomIdentity;
+
+checkAuth();
+checkInviteToken();
 
 fetch('/api/tree').then(r=>{
   if(!r.ok)throw new Error('No API');

@@ -2,22 +2,28 @@
 """Family Tree API server with SQLite database. Zero external dependencies."""
 
 import base64
+import hashlib
 import http.server
 import json
 import os
 import re
+import secrets
 import sqlite3
 import threading
 import uuid
 import webbrowser
+from datetime import datetime, timedelta
 from http import HTTPStatus
+from http.cookies import SimpleCookie
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 
 ROOT = Path(__file__).parent
 DB_PATH = ROOT / 'family.db'
 PHOTOS_DIR = ROOT / 'photos'
 PORT = 8000
+SESSION_DAYS = 30
+INVITE_DAYS = 7
 
 PEOPLE_COLS = [
     'id', 'given_names', 'surname', 'surname_birth', 'nickname',
@@ -69,6 +75,33 @@ CREATE TABLE IF NOT EXISTS partnerships (
     end_date TEXT,
     UNIQUE(person1_id, person2_id)
 );
+
+CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    display_name TEXT DEFAULT '',
+    password_hash TEXT NOT NULL,
+    person_id TEXT REFERENCES people(id) ON DELETE SET NULL,
+    role TEXT DEFAULT 'member' CHECK(role IN ('admin','member','viewer')),
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    token TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT DEFAULT (datetime('now')),
+    expires_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS invites (
+    token TEXT PRIMARY KEY,
+    person_id TEXT REFERENCES people(id) ON DELETE CASCADE,
+    email TEXT,
+    created_by TEXT REFERENCES users(id),
+    created_at TEXT DEFAULT (datetime('now')),
+    expires_at TEXT NOT NULL,
+    used INTEGER DEFAULT 0
+);
 '''
 
 
@@ -92,6 +125,98 @@ def make_display_name(given, surname, fallback_id):
     if given and surname:
         return (surname + given) if (is_cjk(surname) or is_cjk(given)) else (given + ' ' + surname)
     return given or surname or fallback_id
+
+
+# ── Auth ──
+
+def hash_password(password, salt=None):
+    if salt is None:
+        salt = secrets.token_hex(16)
+    h = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100_000)
+    return salt + ':' + h.hex()
+
+
+def verify_password(password, stored):
+    salt, _ = stored.split(':', 1)
+    return hash_password(password, salt) == stored
+
+
+def create_user(email, password, display_name='', role=None):
+    uid = uuid.uuid4().hex[:12]
+    pw_hash = hash_password(password)
+    if role is None:
+        with db_connect() as conn:
+            count = conn.execute('SELECT COUNT(*) FROM users').fetchone()[0]
+        role = 'admin' if count == 0 else 'member'
+    with db_connect() as conn:
+        conn.execute(
+            'INSERT INTO users (id, email, display_name, password_hash, role) VALUES (?,?,?,?,?)',
+            (uid, email.lower().strip(), display_name, pw_hash, role))
+    return uid
+
+
+def authenticate(email, password):
+    with db_connect() as conn:
+        row = conn.execute('SELECT * FROM users WHERE email = ?', (email.lower().strip(),)).fetchone()
+    if not row:
+        return None
+    if verify_password(password, row['password_hash']):
+        return dict(row)
+    return None
+
+
+def create_session(user_id):
+    token = secrets.token_urlsafe(32)
+    expires = (datetime.now(tz=None) + timedelta(days=SESSION_DAYS)).isoformat()
+    with db_connect() as conn:
+        conn.execute('INSERT INTO sessions (token, user_id, expires_at) VALUES (?,?,?)',
+                     (token, user_id, expires))
+    return token
+
+
+def get_session_user(token):
+    if not token:
+        return None
+    with db_connect() as conn:
+        row = conn.execute(
+            '''SELECT u.* FROM sessions s JOIN users u ON s.user_id = u.id
+               WHERE s.token = ? AND s.expires_at > datetime('now')''',
+            (token,)).fetchone()
+    return dict(row) if row else None
+
+
+def delete_session(token):
+    with db_connect() as conn:
+        conn.execute('DELETE FROM sessions WHERE token = ?', (token,))
+
+
+def create_invite(person_id, email, created_by):
+    token = secrets.token_urlsafe(24)
+    expires = (datetime.now(tz=None) + timedelta(days=INVITE_DAYS)).isoformat()
+    with db_connect() as conn:
+        conn.execute(
+            'INSERT INTO invites (token, person_id, email, created_by, expires_at) VALUES (?,?,?,?,?)',
+            (token, person_id, email or None, created_by, expires))
+    return token
+
+
+def get_invite(token):
+    with db_connect() as conn:
+        row = conn.execute(
+            'SELECT * FROM invites WHERE token = ? AND used = 0 AND expires_at > datetime(\'now\')',
+            (token,)).fetchone()
+    return dict(row) if row else None
+
+
+def accept_invite(token, user_id):
+    invite = get_invite(token)
+    if not invite:
+        return None
+    with db_connect() as conn:
+        conn.execute('UPDATE invites SET used = 1 WHERE token = ?', (token,))
+        if invite['person_id']:
+            conn.execute('UPDATE users SET person_id = ? WHERE id = ?', (invite['person_id'], user_id))
+    return invite
 
 
 # ── CRUD ──
@@ -238,7 +363,6 @@ def import_json(data):
             partner_pairs.append((src, tgt, e.get('partnership_type', 'relationship')))
 
     with db_connect() as conn:
-        # Pass 1: insert all people without parent refs
         for n in data.get('nodes', []):
             conn.execute(
                 '''INSERT OR REPLACE INTO people
@@ -258,7 +382,6 @@ def import_json(data):
                  n.get('activities', ''), n.get('bio_notes', ''),
                  n.get('generation', 0)))
 
-        # Pass 2: set parent references
         for child_id, parents in parent_map.items():
             if parents.get('mother_id'):
                 conn.execute('UPDATE people SET mother_id = ? WHERE id = ?', (parents['mother_id'], child_id))
@@ -295,11 +418,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
-    def _json(self, data, status=200):
+    def _json(self, data, status=200, cookie=None):
         body = json.dumps(data, ensure_ascii=False, default=str).encode()
         self.send_response(status)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
         self.send_header('Content-Length', len(body))
+        if cookie:
+            self.send_header('Set-Cookie', cookie)
         self.end_headers()
         self.wfile.write(body)
 
@@ -314,8 +439,35 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._error(400, f'Invalid JSON: {e}')
             return None
 
+    def _get_user(self):
+        cookie_header = self.headers.get('Cookie', '')
+        c = SimpleCookie()
+        try:
+            c.load(cookie_header)
+        except Exception:
+            return None
+        token = c.get('session')
+        if not token:
+            return None
+        return get_session_user(token.value)
+
+    def _require_auth(self):
+        user = self._get_user()
+        if not user:
+            self._error(401, 'Sign in required')
+            return None
+        return user
+
+    def _require_admin(self):
+        user = self._require_auth()
+        if user and user['role'] != 'admin':
+            self._error(403, 'Admin access required')
+            return None
+        return user
+
     def do_GET(self):
         p = urlparse(self.path).path
+        qs = parse_qs(urlparse(self.path).query)
 
         if p == '/api/tree':
             self._json(build_tree())
@@ -326,6 +478,24 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._json(person) if person else self._error(404, 'Not found')
         elif p == '/api/partnerships':
             self._json(list_partnerships())
+        elif p == '/api/auth/me':
+            user = self._get_user()
+            if user:
+                safe = {k: user[k] for k in ('id', 'email', 'display_name', 'person_id', 'role')}
+                self._json(safe)
+            else:
+                self._json(None)
+        elif p.startswith('/api/invites/') and p.count('/') == 3:
+            token = p.split('/')[-1]
+            invite = get_invite(token)
+            if invite:
+                person = get_person(invite['person_id']) if invite['person_id'] else None
+                name = make_display_name(person['given_names'], person['surname'], person['id']) if person else None
+                self._json({'token': invite['token'], 'person_id': invite['person_id'],
+                            'person_name': name, 'email': invite['email'],
+                            'expires_at': invite['expires_at']})
+            else:
+                self._error(404, 'Invite not found or expired')
         elif p.startswith('/api/photos/'):
             fname = Path(p.split('/')[-1]).name
             fpath = PHOTOS_DIR / fname
@@ -341,6 +511,24 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(data)
             else:
                 self._error(404, 'Photo not found')
+        elif p == '/api/search':
+            q = (qs.get('q', [''])[0] or '').strip().lower()
+            if not q:
+                self._json([])
+                return
+            people = list_people()
+            results = []
+            for pp in people:
+                name = make_display_name(pp['given_names'], pp['surname'], pp['id']).lower()
+                fields = [name, (pp['given_names'] or '').lower(), (pp['surname'] or '').lower(),
+                          (pp['surname_birth'] or '').lower(), (pp['profession'] or '').lower(),
+                          (pp['birth_place'] or '').lower(), (pp['company'] or '').lower(),
+                          (pp['bio_notes'] or '').lower(), (pp['interests'] or '').lower()]
+                if any(q in f for f in fields):
+                    results.append({'id': pp['id'], 'name': name,
+                                    'given_names': pp['given_names'], 'surname': pp['surname'],
+                                    'profession': pp['profession'], 'birth_place': pp['birth_place']})
+            self._json(results)
         else:
             super().do_GET()
 
@@ -350,10 +538,66 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if body is None:
             return
 
-        if p == '/api/people':
+        if p == '/api/auth/register':
+            email = (body.get('email') or '').strip().lower()
+            password = body.get('password') or ''
+            display_name = body.get('display_name') or ''
+            invite_token = body.get('invite_token')
+            if not email or not password:
+                self._error(400, 'Email and password required')
+                return
+            if len(password) < 6:
+                self._error(400, 'Password must be at least 6 characters')
+                return
+            try:
+                uid = create_user(email, password, display_name)
+            except sqlite3.IntegrityError:
+                self._error(409, 'Email already registered')
+                return
+            if invite_token:
+                accept_invite(invite_token, uid)
+            token = create_session(uid)
+            cookie = f'session={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age={SESSION_DAYS * 86400}'
+            user = get_session_user(token)
+            safe = {k: user[k] for k in ('id', 'email', 'display_name', 'person_id', 'role')}
+            self._json(safe, 201, cookie=cookie)
+
+        elif p == '/api/auth/login':
+            email = (body.get('email') or '').strip()
+            password = body.get('password') or ''
+            user = authenticate(email, password)
+            if not user:
+                self._error(401, 'Invalid email or password')
+                return
+            token = create_session(user['id'])
+            cookie = f'session={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age={SESSION_DAYS * 86400}'
+            safe = {k: user[k] for k in ('id', 'email', 'display_name', 'person_id', 'role')}
+            self._json(safe, cookie=cookie)
+
+        elif p == '/api/auth/logout':
+            cookie_header = self.headers.get('Cookie', '')
+            c = SimpleCookie()
+            try:
+                c.load(cookie_header)
+            except Exception:
+                pass
+            token = c.get('session')
+            if token:
+                delete_session(token.value)
+            cookie = 'session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'
+            self._json({'ok': True}, cookie=cookie)
+
+        elif p == '/api/people':
+            user = self._require_auth()
+            if not user:
+                return
             pid = create_person(body)
             self._json({'id': pid}, 201)
+
         elif p.endswith('/photo') and '/api/people/' in p:
+            user = self._require_auth()
+            if not user:
+                return
             pid = p.split('/')[3]
             photo = body.get('photo')
             if not photo:
@@ -365,12 +609,44 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self._json({'photo': fname})
             else:
                 self._error(400, 'Invalid photo data')
+
         elif p == '/api/partnerships':
+            user = self._require_auth()
+            if not user:
+                return
             ppid = create_partnership(body)
             self._json({'id': ppid}, 201)
+
         elif p == '/api/import':
+            user = self._require_admin()
+            if not user:
+                return
             count = import_json(body)
             self._json({'imported': count})
+
+        elif p == '/api/invites':
+            user = self._require_auth()
+            if not user:
+                return
+            person_id = body.get('person_id')
+            email = body.get('email')
+            if not person_id:
+                self._error(400, 'person_id required')
+                return
+            token = create_invite(person_id, email, user['id'])
+            self._json({'token': token, 'url': f'/invite/{token}'})
+
+        elif p.startswith('/api/invites/') and p.endswith('/accept'):
+            user = self._require_auth()
+            if not user:
+                return
+            token = p.split('/')[3]
+            result = accept_invite(token, user['id'])
+            if result:
+                self._json({'ok': True, 'person_id': result['person_id']})
+            else:
+                self._error(404, 'Invite not found or expired')
+
         else:
             self._error(404, 'Not found')
 
@@ -381,11 +657,33 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return
 
         if p.startswith('/api/people/') and p.count('/') == 3:
+            user = self._require_auth()
+            if not user:
+                return
             ok = update_person(p.split('/')[-1], body)
             self._json({'ok': True}) if ok else self._error(404, 'Not found')
         elif p.startswith('/api/partnerships/'):
+            user = self._require_auth()
+            if not user:
+                return
             ok = update_partnership(int(p.split('/')[-1]), body)
             self._json({'ok': True}) if ok else self._error(404, 'Not found')
+        elif p == '/api/auth/link':
+            user = self._require_auth()
+            if not user:
+                return
+            person_id = body.get('person_id')
+            if not person_id:
+                self._error(400, 'person_id required')
+                return
+            with db_connect() as conn:
+                existing = conn.execute('SELECT id FROM users WHERE person_id = ? AND id != ?',
+                                        (person_id, user['id'])).fetchone()
+                if existing:
+                    self._error(409, 'This person is already claimed by another user')
+                    return
+                conn.execute('UPDATE users SET person_id = ? WHERE id = ?', (person_id, user['id']))
+            self._json({'ok': True, 'person_id': person_id})
         else:
             self._error(404, 'Not found')
 
@@ -393,9 +691,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         p = urlparse(self.path).path
 
         if p.startswith('/api/people/') and p.count('/') == 3:
+            user = self._require_admin()
+            if not user:
+                return
             ok = delete_person(p.split('/')[-1])
             self._json({'ok': True}) if ok else self._error(404, 'Not found')
         elif p.startswith('/api/partnerships/'):
+            user = self._require_auth()
+            if not user:
+                return
             ok = delete_partnership(int(p.split('/')[-1]))
             self._json({'ok': True}) if ok else self._error(404, 'Not found')
         else:
@@ -403,7 +707,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def do_OPTIONS(self):
         self.send_response(204)
-        self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.end_headers()
@@ -435,11 +738,16 @@ def main():
     else:
         print(f'Database has {count} people')
 
+    with db_connect() as conn:
+        user_count = conn.execute('SELECT COUNT(*) FROM users').fetchone()[0]
+    print(f'  Users: {user_count} (first registration becomes admin)')
+
     server = http.server.ThreadingHTTPServer(('', PORT), Handler)
     print(f'\nFamily Tree at http://localhost:{PORT}  (Ctrl+C to stop)')
     print(f'  Database: {DB_PATH}')
     print(f'  Photos:   {PHOTOS_DIR}/')
-    print(f'  API docs: GET /api/tree, /api/people, /api/partnerships\n')
+    print(f'  API docs: GET /api/tree, /api/people, /api/partnerships')
+    print(f'  Auth:     POST /api/auth/register, /api/auth/login, GET /api/auth/me\n')
     threading.Timer(0.5, lambda: webbrowser.open(f'http://localhost:{PORT}')).start()
     server.serve_forever()
 

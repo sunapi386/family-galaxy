@@ -1,6 +1,6 @@
 # Family Galaxy
 
-Interactive family tree visualizer with a space-themed UI. Click nodes to explore relationships, edit profiles, upload photos, and export data.
+Interactive family tree visualizer with a space-themed UI. Click nodes to explore relationships, edit profiles, upload photos, and invite family members to collaborate.
 
 ## Quick Start
 
@@ -20,49 +20,91 @@ You can also drag-and-drop any FamilyScript `.txt` export (from [Family Echo](ht
 
 - **Clustered layout**: families automatically group by surname with colored backgrounds
 - **Focused view**: click any person to animate their immediate family into a compact view
+- **Search**: search by name, profession, birthplace, company, or notes with `/`
+- **User accounts**: register and sign in to edit; first user becomes admin
+- **Invite system**: generate invite links for family members to claim their profiles
 - **Edit profiles**: click Edit in the sidebar to modify names, dates, profession, contact info
-- **Photo upload**: attach profile photos (stored locally in `photos/`)
-- **Add/delete people**: full CRUD from the UI
-- **Search**: `/` to search by name, `F` to fit all, `C` to center on start person
-- **Drag-and-drop import**: load FamilyScript files directly
-- **Export**: download full tree as JSON
+- **Photo upload**: attach profile photos when creating or editing people
+- **Import/Export**: import JSON files or export the full tree as JSON
+- **Drag-and-drop**: load FamilyScript files directly onto the page
 - **Minimap**: bottom-right corner shows viewport position
+
+## Multi-User Setup
+
+1. Start the server and register the first account (becomes admin)
+2. Click any person node, then click **Invite** to generate a shareable link
+3. Share the link with family members; they register and claim their profile
+4. Members can edit profiles and add people; admins can also delete and import data
+
+Invite links are valid for 7 days. Users who claim a profile see their node highlighted in green.
 
 ## API
 
 All data is stored in a SQLite database (`family.db`). The server exposes a REST API:
 
+### Tree & People
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/tree` | Full tree (nodes + edges) | No |
+| `GET` | `/api/people` | List all people | No |
+| `GET` | `/api/people/:id` | Get one person | No |
+| `POST` | `/api/people` | Create a person | Yes |
+| `PUT` | `/api/people/:id` | Update a person | Yes |
+| `DELETE` | `/api/people/:id` | Delete a person | Admin |
+| `POST` | `/api/people/:id/photo` | Upload photo (base64 JSON) | Yes |
+| `GET` | `/api/photos/:file` | Serve a photo | No |
+| `GET` | `/api/search?q=term` | Search people by multiple fields | No |
+
+### Partnerships
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/partnerships` | List partnerships | No |
+| `POST` | `/api/partnerships` | Create a partnership | Yes |
+| `PUT` | `/api/partnerships/:id` | Update a partnership | Yes |
+| `DELETE` | `/api/partnerships/:id` | Delete a partnership | Yes |
+
+### Auth
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/tree` | Full tree (nodes + edges) for the frontend |
-| `GET` | `/api/people` | List all people |
-| `GET` | `/api/people/:id` | Get one person |
-| `POST` | `/api/people` | Create a person |
-| `PUT` | `/api/people/:id` | Update a person |
-| `DELETE` | `/api/people/:id` | Delete a person (cascades) |
-| `POST` | `/api/people/:id/photo` | Upload photo (base64 JSON) |
-| `GET` | `/api/photos/:file` | Serve a photo |
-| `GET` | `/api/partnerships` | List partnerships |
-| `POST` | `/api/partnerships` | Create a partnership |
-| `PUT` | `/api/partnerships/:id` | Update a partnership |
-| `DELETE` | `/api/partnerships/:id` | Delete a partnership |
-| `POST` | `/api/import` | Import tree data (JSON) |
+| `POST` | `/api/auth/register` | Create account (email, password, display_name) |
+| `POST` | `/api/auth/login` | Sign in (email, password) |
+| `POST` | `/api/auth/logout` | Sign out |
+| `GET` | `/api/auth/me` | Current user info |
+| `PUT` | `/api/auth/link` | Link user to a person_id ("This is me") |
+
+### Invites
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/api/invites` | Create invite (person_id, email) | Yes |
+| `GET` | `/api/invites/:token` | Validate invite | No |
+| `POST` | `/api/invites/:token/accept` | Accept invite, link to profile | Yes |
+
+### Import
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/api/import` | Import tree data (JSON) | Admin |
 
 ### Example: create a person
 
 ```bash
 curl -X POST http://localhost:8000/api/people \
   -H 'Content-Type: application/json' \
+  -b cookies.txt \
   -d '{"given_names": "Jane", "surname": "Doe", "gender": "female", "birth_date": "1990 Mar 15"}'
 ```
 
 ### Example: upload a photo
 
 ```bash
-# Base64 encode and send
 BASE64=$(base64 -w0 photo.jpg)
 curl -X POST http://localhost:8000/api/people/START/photo \
   -H 'Content-Type: application/json' \
+  -b cookies.txt \
   -d "{\"photo\": \"data:image/jpeg;base64,$BASE64\"}"
 ```
 
@@ -70,7 +112,7 @@ curl -X POST http://localhost:8000/api/people/START/photo \
 
 | File | Purpose |
 |------|---------|
-| `server.py` | API server + SQLite database (zero dependencies) |
+| `server.py` | API server + SQLite + auth (zero dependencies) |
 | `index.html` | Frontend visualization (D3.js) |
 | `parse.py` | FamilyScript parser (converts `.txt` to `data.json`) |
 | `family.db` | SQLite database (auto-created, gitignored) |
@@ -80,13 +122,9 @@ curl -X POST http://localhost:8000/api/people/START/photo \
 
 The app uses **SQLite** as its primary database. FamilyScript (Family Echo's `.txt` format) is supported for import only.
 
-Why not FamilyScript as the database?
-- Stores photo URLs, not actual images
-- Tab-separated with fragile escaping
-- No schema versioning or extensibility
-- Only used by Family Echo
+The SQLite schema has five tables: `people` (26 columns), `partnerships` (type, dates, location), `users` (email, password hash, linked person), `sessions`, and `invites`.
 
-The SQLite schema has two tables: `people` (26 columns including photo path, parent foreign keys) and `partnerships` (type, dates, location).
+Passwords are hashed with PBKDF2-HMAC-SHA256 (100k iterations). Sessions use HttpOnly SameSite cookies.
 
 ## Keyboard Shortcuts
 
