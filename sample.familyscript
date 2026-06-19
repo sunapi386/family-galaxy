@@ -1,0 +1,30 @@
+# Sample family tree for demo purposes
+# This is FamilyScript format (Family Echo export)
+# Load via drag-and-drop or the Load button
+iSTART	pAlex	lJohnson	gm	b19920515	esample@example.com
+iMOM1	pSarah	lJohnson	qMiller	gf	b19650312
+iDAD1	pJames	lJohnson	gm	b19630820
+iPARTNER1	pJordan	lSmith	gf	b19930401
+iKID1	pSam	lJohnson	gm	b20200115
+iSIB1	pMorgan	lJohnson	gf	b19950210
+iGMA1	pEleanor	lMiller	gf	b19400605	z1	d20150320
+iGPA1	pRobert	lMiller	gm	b19380112	z1	d20180714
+iGMA2	pDorothy	lJohnson	qWilliams	gf	b19350901	z1
+iGPA2	pHarold	lJohnson	gm	b19330418	z1
+iUNCLE1	pDavid	lMiller	gm	b19680730
+iAUNT1	pLisa	lMiller	qBrown	gf	b19700215
+iCOUSIN1	pEmma	lMiller	gf	b19980522
+iCOUSIN2	pNoah	lMiller	gm	b20010913
+iSTART	mMOM1	fDAD1	sPARTNER1
+iMOM1	mGMA1	fGPA1
+iDAD1	mGMA2	fGPA2
+iKID1	mPARTNER1	fSTART
+iSIB1	mMOM1	fDAD1
+iUNCLE1	mGMA1	fGPA1
+iCOUSIN1	mAUNT1	fUNCLE1
+iCOUSIN2	mAUNT1	fUNCLE1
+pSTART PARTNER1	gm	m20190601	wCity Hall
+pMOM1 DAD1	gm	m19890315
+pGMA1 GPA1	gm
+pGMA2 GPA2	gm
+pUNCLE1 AUNT1	gm	m19950801

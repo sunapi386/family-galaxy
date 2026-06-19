@@ -1,0 +1,20 @@
+# Database
+*.db
+*.db-journal
+*.db-wal
+
+# Personal data
+data.json
+*.txt
+
+# Photos
+photos/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
