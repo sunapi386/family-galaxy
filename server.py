@@ -12,7 +12,7 @@ import sqlite3
 import threading
 import uuid
 import webbrowser
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from http.cookies import SimpleCookie
 from pathlib import Path
@@ -167,7 +167,7 @@ def authenticate(email, password):
 
 def create_session(user_id):
     token = secrets.token_urlsafe(32)
-    expires = (datetime.now(tz=None) + timedelta(days=SESSION_DAYS)).isoformat()
+    expires = (datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS)).isoformat()
     with db_connect() as conn:
         conn.execute('INSERT INTO sessions (token, user_id, expires_at) VALUES (?,?,?)',
                      (token, user_id, expires))
@@ -192,7 +192,7 @@ def delete_session(token):
 
 def create_invite(person_id, email, created_by):
     token = secrets.token_urlsafe(24)
-    expires = (datetime.now(tz=None) + timedelta(days=INVITE_DAYS)).isoformat()
+    expires = (datetime.now(timezone.utc) + timedelta(days=INVITE_DAYS)).isoformat()
     with db_connect() as conn:
         conn.execute(
             'INSERT INTO invites (token, person_id, email, created_by, expires_at) VALUES (?,?,?,?,?)',

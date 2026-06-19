@@ -1767,7 +1767,7 @@ document.getElementById('btn-create-invite').addEventListener('click',async func
       body:JSON.stringify({person_id:invitePersonId,email})});
     const data=await r.json();
     if(!r.ok){toast(data.error||'Error');return}
-    const url=location.origin+data.url;
+    const url=location.origin+'/#invite/'+data.token;
     document.getElementById('invite-url').value=url;
     document.getElementById('invite-result').style.display='';
     const person=state.nodeMap[invitePersonId];

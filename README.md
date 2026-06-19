@@ -126,6 +126,12 @@ The SQLite schema has five tables: `people` (26 columns), `partnerships` (type, 
 
 Passwords are hashed with PBKDF2-HMAC-SHA256 (100k iterations). Sessions use HttpOnly SameSite cookies.
 
+## Deployment
+
+The server binds to all interfaces on port 8000. For local use, family members on the same network can access it via your LAN IP. Invite links embed `location.origin`, so whatever host you browse from is what gets shared.
+
+For remote family, deploy behind a reverse proxy with HTTPS. If you add TLS, also add `Secure` to the session cookie in `server.py`.
+
 ## Keyboard Shortcuts
 
 | Key | Action |
